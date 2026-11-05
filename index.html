@@ -19,8 +19,8 @@
         .action-group select { flex: 2; margin-bottom: 0; }
         .action-group button { flex: 1; }
 
-        button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; color: white; }
-        button:active { opacity: 0.8; }
+        button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; color: white; transition: transform 0.1s; }
+        button:active { transform: scale(0.95); opacity: 0.8; }
         button:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.7; }
         
         .btn-thuong { background-color: var(--success); }
@@ -53,15 +53,14 @@
         th:last-child { border-top-right-radius: 8px; }
         tr:nth-child(even) { background-color: #f9f9f9; }
 
-        /* Spinner Loading */
-        #loader { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+        #loader { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
         .spinner { border: 5px solid #f3f3f3; border-top: 5px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-<!-- Màn hình Loading -->
+<!-- Loader chỉ hiện khi mới tải trang lần đầu -->
 <div id="loader">
     <div class="spinner"></div>
     <p style="font-weight: bold; margin-top: 10px; color: var(--primary);">Đang đồng bộ dữ liệu...</p>
@@ -177,7 +176,6 @@
         </div>
     </div>
 
-    <!-- KHU VỰC BÁO CÁO THỐNG KÊ -->
     <div id="reportView" style="display: none;">
         <div class="card">
             <h3>Thống kê theo ngày của <br><span class="currentChildNameDisplay" style="color: var(--primary);">Vũ Quốc Thiện</span></h3>
@@ -201,7 +199,7 @@
 
 <script>
     // -------------------------------------------------------------
-    // THAY URL CỦA BẠN VÀO DÒNG BÊN DƯỚI
+    // DÁN URL CỦA BẠN VÀO ĐÂY:
     const SCRIPT_URL = https://script.google.com/macros/s/AKfycbxs2nuRNIBnJGEYs8mtB4ti7KNyDJMXh4P2kNr0Ndyr_pr3QHDgZOAj4uRzrABlelkRMw/exec; 
     // -------------------------------------------------------------
 
@@ -217,51 +215,57 @@
 
     function formatMoney(amount) { return amount.toLocaleString('vi-VN') + ' đ'; }
     function formatMoneyShort(amount) { return (amount/1000) + 'k'; }
+    
+    // HÀM SỬA LỖI LỆCH MÚI GIỜ KHI TẢI TỪ GOOGLE SHEETS
+    function parseSheetDate(dStr) {
+        if (!dStr) return "";
+        if (!dStr.includes('T')) return dStr.substring(0, 10);
+        // Tự động điều chỉnh UTC về giờ Việt Nam (Local Time)
+        const d = new Date(dStr);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
 
-    // HÀM GIAO TIẾP VỚI GOOGLE SHEETS
+    // HÀM TẢI DỮ LIỆU LẦN ĐẦU (Có Loader)
     async function loadData() {
-        showLoader();
+        document.getElementById('loader').style.display = 'flex';
         try {
             const response = await fetch(SCRIPT_URL);
             const data = await response.json();
-            records = data.records || [];
-            lockedDates = data.lockedDates || { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
             
-            // Xử lý trường hợp sheet trống chưa có mảng con
-            if(!lockedDates['Vũ Quốc Thiện']) lockedDates['Vũ Quốc Thiện'] = [];
-            if(!lockedDates['Vũ Công Thành']) lockedDates['Vũ Công Thành'] = [];
+            // Xử lý lại định dạng ngày chuẩn
+            records = (data.records || []).map(r => ({ ...r, date: parseSheetDate(r.date) }));
+            
+            const rawLocks = data.lockedDates || { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
+            lockedDates = { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
+            
+            for(let child in rawLocks) {
+                lockedDates[child] = rawLocks[child].map(d => parseSheetDate(d));
+            }
             
             updateLockStatusUI();
             if(currentView === 'home') renderHome();
             else renderReport();
         } catch (error) {
             console.error(error);
-            alert("Lỗi tải dữ liệu. Vui lòng thử lại!");
         }
-        hideLoader();
+        document.getElementById('loader').style.display = 'none';
     }
 
-    async function sendData(action, formDataObj) {
-        showLoader();
+    // HÀM ĐỒNG BỘ CHẠY NGẦM (Không hiện Loader, không chờ đợi - CỰC NHANH)
+    function sendDataBackground(action, formDataObj) {
         const formData = new FormData();
         formData.append('action', action);
         for (let key in formDataObj) { formData.append(key, formDataObj[key]); }
 
-        try {
-            await fetch(SCRIPT_URL, { method: 'POST', body: formData });
-            await loadData(); // Tải lại toàn bộ dữ liệu mới nhất
-        } catch (error) {
-            console.error(error);
-            alert("Lỗi kết nối. Vui lòng kiểm tra mạng!");
-            hideLoader();
-        }
+        // Bắn API đi và không quan tâm đến response để ứng dụng không bị khựng
+        fetch(SCRIPT_URL, { method: 'POST', body: formData })
+            .catch(error => console.error("Lỗi đồng bộ ngầm: ", error));
     }
 
-    // TẢI DỮ LIỆU LẦN ĐẦU
     loadData();
-
-    function showLoader() { document.getElementById('loader').style.display = 'flex'; }
-    function hideLoader() { document.getElementById('loader').style.display = 'none'; }
 
     function updateLockStatusUI() {
         const selectedDate = document.getElementById('recordDate').value;
@@ -290,9 +294,15 @@
         if (!selectedDate) return;
         const displayDate = selectedDate.split('-').reverse().join('/');
         
-        if (confirm(`Bạn chắc chắn muốn CHỐT SỔ ngày ${displayDate} cho ${currentChild}?\nSau khi chốt sẽ KHÔNG THỂ sửa đổi.`)) {
+        if (confirm(`Bạn chắc chắn muốn CHỐT SỔ ngày ${displayDate} cho ${currentChild}?`)) {
             if (!lockedDates[currentChild].includes(selectedDate)) {
-                sendData('lockDate', { child: currentChild, date: selectedDate });
+                // 1. CẬP NHẬT GIAO DIỆN TỨC THÌ
+                lockedDates[currentChild].push(selectedDate);
+                updateLockStatusUI();
+                renderHome();
+                
+                // 2. GỬI DỮ LIỆU NGẦM
+                sendDataBackground('lockDate', { child: currentChild, date: selectedDate });
             }
         }
     }
@@ -352,19 +362,32 @@
         if (!date) return alert("Vui lòng chọn ngày!");
         if (lockedDates[currentChild].includes(date)) return alert("Ngày này đã chốt!");
 
-        sendData('addRecord', {
-            id: Date.now(),
+        const newRecord = {
+            id: Date.now().toString(),
             child: currentChild,
             date: date,
             desc: desc,
             amount: amount,
             type: type
-        });
+        };
+
+        // 1. CẬP NHẬT GIAO DIỆN TỨC THÌ ĐỂ KHÔNG BỊ TRỄ
+        records.push(newRecord);
+        currentPage = 1; 
+        renderHome();
+
+        // 2. GỬI DỮ LIỆU NGẦM LÊN GOOGLE SHEETS
+        sendDataBackground('addRecord', newRecord);
     }
 
     function deleteRecord(id) {
         if(confirm("Bạn có chắc muốn xóa bản ghi này?")) {
-            sendData('deleteRecord', { id: id });
+            // 1. XOÁ TRÊN GIAO DIỆN TỨC THÌ
+            records = records.filter(r => r.id != id);
+            renderHome();
+            
+            // 2. XOÁ CHẠY NGẦM LÊN GOOGLE SHEETS
+            sendDataBackground('deleteRecord', { id: id });
         }
     }
 
@@ -398,16 +421,11 @@
             const amountClass = record.amount > 0 ? 'text-success' : 'text-danger';
             const amountSign = record.amount > 0 ? '+' : '';
             
-            // Format ngày để tránh lỗi timezone hiển thị
-            let displayDate = record.date;
-            if(record.date.includes('T')) {
-                displayDate = record.date.split('T')[0].split('-').reverse().join('/');
-            } else {
-                displayDate = record.date.split('-').reverse().join('/');
-            }
-
-            const isRecordLocked = lockedDates[currentChild].includes(record.date.split('T')[0]);
-            const actionHtml = isRecordLocked ? `<span style="font-size: 11px; color: #7f8c8d; margin-left:10px;">🔒 Đã chốt</span>` : `<button class="delete-btn" onclick="deleteRecord(${record.id})">Xóa</button>`;
+            // Ngày được xử lý chắc chắn đã chuẩn hoá
+            const displayDate = record.date.split('-').reverse().join('/');
+            
+            const isRecordLocked = lockedDates[currentChild].includes(record.date);
+            const actionHtml = isRecordLocked ? `<span style="font-size: 11px; color: #7f8c8d; margin-left:10px;">🔒 Đã chốt</span>` : `<button class="delete-btn" onclick="deleteRecord('${record.id}')">Xóa</button>`;
 
             li.innerHTML = `
                 <div class="item-info">
@@ -439,7 +457,7 @@
         const groupedData = {};
         
         childRecords.forEach(record => {
-            const dateStr = record.date.includes('T') ? record.date.split('T')[0] : record.date;
+            const dateStr = record.date;
             if (!groupedData[dateStr]) groupedData[dateStr] = { thuong: 0, phat: 0, net: 0 };
             
             if (record.amount > 0) groupedData[dateStr].thuong += record.amount;
