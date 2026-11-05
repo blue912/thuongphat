@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Thưởng Phạt Các Con</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --bg: #f4f7f6;
+            --card: #ffffff;
+            --text: #333333;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h1, h2, h3 { margin-top: 0; text-align: center; }
+        
+        .balance-box { text-align: center; padding: 20px; background: linear-gradient(135deg, #4a90e2, #63a4ff); color: white; border-radius: 12px; margin-bottom: 20px; }
+        .balance-amount { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
+
+        select, input[type="date"], input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 10px;}
+        
+        .action-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        .action-group select { flex: 2; margin-bottom: 0; }
+        .action-group button { flex: 1; }
+
+        button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: opacity 0.2s; color: white; }
+        button:active { opacity: 0.8; }
+        button:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.7; }
+        
+        .btn-thuong { background-color: var(--success); }
+        .btn-phat { background-color: var(--danger); }
+        .btn-tieudung { background-color: var(--warning); }
+        .btn-lock { background-color: #34495e; padding: 10px 15px; }
+
+        .history-list { list-style: none; padding: 0; margin: 0; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .item-info { display: flex; flex-direction: column; }
+        .item-date { font-size: 0.8em; color: #777; }
+        .item-desc { font-weight: bold; }
+        
+        .text-success { color: var(--success); font-weight: bold; }
+        .text-danger { color: var(--danger); font-weight: bold; }
+        
+        .delete-btn { background: #ff7675; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; }
+
+        .main-tabs, .child-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { flex: 1; padding: 10px; text-align: center; background: #ddd; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab.active { background: var(--primary); color: white; }
+        .main-tabs .tab.active { background: #2c3e50; }
+
+        .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+        .pagination button { background: #7f8c8d; padding: 8px 15px; }
+        .pagination span { font-weight: bold; font-size: 14px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th, td { padding: 10px 5px; text-align: center; border-bottom: 1px solid #eee; }
+        th { background: #2c3e50; color: white; font-weight: normal; }
+        th:first-child { border-top-left-radius: 8px; }
+        th:last-child { border-top-right-radius: 8px; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="color: var(--primary);">Quản Lý Thưởng Phạt</h2>
+
+    <!-- Tab Chức Năng Chính -->
+    <div class="main-tabs">
+        <div class="tab main-tab active" onclick="switchMainTab('home')">📋 Nhập liệu</div>
+        <div class="tab main-tab" onclick="switchMainTab('report')">📊 Báo cáo</div>
+    </div>
+
+    <!-- Tab Chọn Con -->
+    <div class="child-tabs">
+        <div class="tab child-tab active" onclick="switchChild('Vũ Quốc Thiện')">Vũ Quốc Thiện</div>
+        <div class="tab child-tab" onclick="switchChild('Vũ Công Thành')">Vũ Công Thành</div>
+    </div>
+
+    <!-- KHU VỰC NHẬP LIỆU -->
+    <div id="homeView">
+        <div class="balance-box">
+            <div>Tổng quỹ hiện tại của <span class="currentChildNameDisplay">Vũ Quốc Thiện</span></div>
+            <div class="balance-amount" id="totalBalance">0 đ</div>
+            <div style="font-size: 0.9em; opacity: 0.9;">Hôm nay: <span id="todaySummary">0 đ</span></div>
+        </div>
+
+        <div class="card">
+            <h3>Ghi nhận theo quy định</h3>
+            
+            <!-- Chốt ngày -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                <input type="date" id="recordDate" style="margin-bottom: 0; flex: 1;" onchange="updateLockStatusUI()">
+                <button id="btnLockDate" class="btn-lock" onclick="lockCurrentDate()">🔒 Chốt ngày</button>
+            </div>
+            <p id="lockMessage" style="color: var(--danger); font-size: 13px; font-weight: bold; margin-top: -5px; margin-bottom: 15px; display: none;">
+                ⚠️ Ngày này đã chốt, không thể thêm/xóa giao dịch.
+            </p>
+            
+            <!-- Vùng Nhập Liệu (Sẽ bị khóa nếu đã chốt ngày) -->
+            <div id="inputSection">
+                <div class="action-group">
+                    <select id="thuongSelect">
+                        <option value="5000" data-desc="Quét nhà">Quét nhà (5.000đ)</option>
+                        <option value="5000" data-desc="Dọn bàn học, bàn ghế">Dọn bàn học, bàn ghế (5.000đ)</option>
+                        <option value="5000" data-desc="Đổ rác">Đổ rác (5.000đ)</option>
+                        <option value="5000" data-desc="Phơi quần áo (ít)">Phơi quần áo (ít) (5.000đ)</option>
+                        <option value="5000" data-desc="Thu + gấp quần áo (ít)">Thu + gấp quần áo (ít) (5.000đ)</option>
+                        <option value="5000" data-desc="Không kén ăn">Không kén ăn (5.000đ)</option>
+                        <option value="5000" data-desc="Tập thể dục, đạp xe ít">Tập thể dục, đạp xe ít (5.000đ)</option>
+                        <option value="5000" data-desc="Dọn giường, gấp chăn">Dọn giường, gấp chăn (5.000đ)</option>
+                        <option value="5000" data-desc="Sắp xếp gọn giầy dép, cặp sách">Sắp xếp gọn giầy dép, cặp (5.000đ)</option>
+                        <option value="5000" data-desc="Tự giác học bài, làm bài">Tự giác học bài (5.000đ)</option>
+                        <option value="5000" data-desc="Dậy em học bài (không cáu gắt)">Dậy em học bài (5.000đ)</option>
+                        <option value="10000" data-desc="Lau nhà">Lau nhà (10.000đ)</option>
+                        <option value="10000" data-desc="Rửa bát">Rửa bát (10.000đ)</option>
+                        <option value="10000" data-desc="Thu + gấp quần áo (nhiều)">Thu + gấp quần áo nhiều (10.000đ)</option>
+                        <option value="10000" data-desc="Phơi quần áo (nhiều)">Phơi quần áo nhiều (10.000đ)</option>
+                        <option value="10000" data-desc="Dọn phòng, hút bụi">Dọn phòng, hút bụi (10.000đ)</option>
+                        <option value="15000" data-desc="Tập thể dục, đạp xe nhiều">Tập thể dục, đạp xe nhiều (15.000đ)</option>
+                        <option value="15000" data-desc="Duy trì việc đều trong tuần">Duy trì việc đều trong tuần (15.000đ)</option>
+                    </select>
+                    <button class="btn-thuong" onclick="addFromSelect('thuongSelect', 'thuong')">+ Thưởng</button>
+                </div>
+
+                <div class="action-group">
+                    <select id="phatSelect">
+                        <option value="5000" data-desc="Bừa bộn giày dép, cặp sách">Bừa bộn giày dép (-5.000đ)</option>
+                        <option value="5000" data-desc="Mất đồ dùng học tập">Mất đồ dùng học tập (-5.000đ)</option>
+                        <option value="10000" data-desc="Không gương mẫu">Không gương mẫu (-10.000đ)</option>
+                        <option value="10000" data-desc="Không ăn hết cơm (Ủn)">Không ăn hết cơm (Ủn) (-10.000đ)</option>
+                        <option value="10000" data-desc="Nổi nóng, cáu gắt">Nổi nóng, cáu gắt (-10.000đ)</option>
+                        <option value="10000" data-desc="Trì hoãn">Trì hoãn (-10.000đ)</option>
+                        <option value="10000" data-desc="Trưa không ngủ">Trưa không ngủ (-10.000đ)</option>
+                        <option value="10000" data-desc="Không làm việc gì trong ngày">Không làm việc gì (-10.000đ)</option>
+                        <option value="10000" data-desc="Chi tiền bừa bãi">Chi tiền bừa bãi (-10.000đ)</option>
+                        <option value="15000" data-desc="Đi ngủ muộn từ 23h00">Đi ngủ muộn từ 23h00 (-15.000đ)</option>
+                        <option value="15000" data-desc="Không làm bài tập">Không làm bài tập (-15.000đ)</option>
+                        <option value="20000" data-desc="Cãi lời">Cãi lời (-20.000đ)</option>
+                    </select>
+                    <button class="btn-phat" onclick="addFromSelect('phatSelect', 'phat')">- Phạt</button>
+                </div>
+
+                <div class="action-group">
+                    <select id="phiSelect">
+                        <option value="15000" data-desc="Xem tivi (30 phút)">Xem tivi 30 phút (-15.000đ)</option>
+                        <option value="15000" data-desc="Xem điện thoại (30 phút)">Xem điện thoại 30 phút (-15.000đ)</option>
+                        <option value="15000" data-desc="Xem Ipad (30 phút)">Xem Ipad 30 phút (-15.000đ)</option>
+                        <option value="15000" data-desc="Xem máy tính">Xem máy tính (-15.000đ)</option>
+                    </select>
+                    <button class="btn-tieudung" onclick="addFromSelect('phiSelect', 'tieu')">- Trừ Phí</button>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+                
+                <h3 style="font-size: 16px; text-align: left; margin-bottom: 10px;">Mục khác (nhập tay)</h3>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <input type="text" id="customDesc" placeholder="Nhập lý do...">
+                    <input type="number" id="customAmount" placeholder="Số tiền (đ)">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-thuong" onclick="addCustom('thuong')" style="flex: 1;">Thưởng</button>
+                    <button class="btn-phat" onclick="addCustom('phat')" style="flex: 1;">Phạt / Phí</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Lịch sử giao dịch</h3>
+            <ul class="history-list" id="historyList"></ul>
+            <div class="pagination">
+                <button onclick="changePage(-1)" id="btnPrev">« Trước</button>
+                <span id="pageInfo">Trang 1/1</span>
+                <button onclick="changePage(1)" id="btnNext">Sau »</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KHU VỰC BÁO CÁO THỐNG KÊ -->
+    <div id="reportView" style="display: none;">
+        <div class="card">
+            <h3>Thống kê theo ngày của <br><span class="currentChildNameDisplay" style="color: var(--primary);">Vũ Quốc Thiện</span></h3>
+            <table id="reportTable">
+                <thead>
+                    <tr>
+                        <th>Ngày</th>
+                        <th>Thưởng</th>
+                        <th>Phạt/Phí</th>
+                        <th>Kết quả</th>
+                    </tr>
+                </thead>
+                <tbody id="reportBody">
+                    <!-- Dữ liệu báo cáo -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let currentChild = 'Vũ Quốc Thiện';
+    let currentView = 'home';
+    let currentPage = 1;
+    const ITEMS_PER_PAGE = 20;
+
+    // Load Data từ Local Storage
+    let records = JSON.parse(localStorage.getItem('thuongPhatData')) || [];
+    
+    // Cấu trúc LockedDates: { "Vũ Quốc Thiện": ["2026-11-05"], "Vũ Công Thành": [] }
+    let lockedDates = JSON.parse(localStorage.getItem('thuongPhatLockedDates')) || {};
+    if(!lockedDates['Vũ Quốc Thiện']) lockedDates['Vũ Quốc Thiện'] = [];
+    if(!lockedDates['Vũ Công Thành']) lockedDates['Vũ Công Thành'] = [];
+
+    // Khởi tạo ngày hiện tại
+    document.getElementById('recordDate').valueAsDate = new Date();
+
+    function formatMoney(amount) {
+        return amount.toLocaleString('vi-VN') + ' đ';
+    }
+    
+    function formatMoneyShort(amount) {
+        return (amount/1000) + 'k'; 
+    }
+
+    // Kiểm tra và Cập nhật giao diện Khóa (Chốt ngày)
+    function updateLockStatusUI() {
+        const selectedDate = document.getElementById('recordDate').value;
+        const isLocked = lockedDates[currentChild].includes(selectedDate);
+        
+        const btnLockDate = document.getElementById('btnLockDate');
+        const lockMessage = document.getElementById('lockMessage');
+        const inputSection = document.getElementById('inputSection');
+        const actionButtons = inputSection.querySelectorAll('button');
+
+        if (isLocked) {
+            btnLockDate.innerText = '🔒 Đã chốt';
+            btnLockDate.disabled = true;
+            btnLockDate.style.background = '#95a5a6'; // Đổi màu xám
+            lockMessage.style.display = 'block';
+            actionButtons.forEach(btn => btn.disabled = true);
+        } else {
+            btnLockDate.innerText = '🔒 Chốt ngày';
+            btnLockDate.disabled = false;
+            btnLockDate.style.background = '#34495e'; 
+            lockMessage.style.display = 'none';
+            actionButtons.forEach(btn => btn.disabled = false);
+        }
+    }
+
+    function lockCurrentDate() {
+        const selectedDate = document.getElementById('recordDate').value;
+        if (!selectedDate) return;
+        const displayDate = selectedDate.split('-').reverse().join('/');
+        
+        if (confirm(`Bạn chắc chắn muốn CHỐT SỔ ngày ${displayDate} cho ${currentChild}?\nSau khi chốt sẽ KHÔNG THỂ thêm mới hay xóa dữ liệu của ngày này.`)) {
+            if (!lockedDates[currentChild].includes(selectedDate)) {
+                lockedDates[currentChild].push(selectedDate);
+                localStorage.setItem('thuongPhatLockedDates', JSON.stringify(lockedDates));
+                updateLockStatusUI();
+                renderHome(); // Render lại để ẩn các nút Xóa
+            }
+        }
+    }
+
+    function switchMainTab(view) {
+        currentView = view;
+        document.querySelectorAll('.main-tab').forEach(tab => {
+            if(tab.innerText.toLowerCase().includes(view === 'home' ? 'nhập' : 'báo cáo')) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+
+        if(view === 'home') {
+            document.getElementById('homeView').style.display = 'block';
+            document.getElementById('reportView').style.display = 'none';
+            renderHome();
+        } else {
+            document.getElementById('homeView').style.display = 'none';
+            document.getElementById('reportView').style.display = 'block';
+            renderReport();
+        }
+    }
+
+    function switchChild(childName) {
+        currentChild = childName;
+        currentPage = 1; 
+        
+        document.querySelectorAll('.currentChildNameDisplay').forEach(el => el.innerText = childName);
+        document.querySelectorAll('.child-tab').forEach(tab => {
+            if(tab.innerText === childName) tab.classList.add('active');
+            else tab.classList.remove('active');
+        });
+        
+        updateLockStatusUI();
+
+        if(currentView === 'home') renderHome();
+        else renderReport();
+    }
+
+    function addFromSelect(selectId, type) {
+        const select = document.getElementById(selectId);
+        const option = select.options[select.selectedIndex];
+        const desc = option.getAttribute('data-desc');
+        let amount = parseInt(select.value);
+        
+        if (type !== 'thuong') amount = -amount;
+        addRecord(desc, amount, type);
+    }
+
+    function addCustom(type) {
+        const desc = document.getElementById('customDesc').value;
+        let amount = parseInt(document.getElementById('customAmount').value);
+        
+        if (!desc || isNaN(amount) || amount <= 0) return alert("Vui lòng nhập lý do và số tiền hợp lệ!");
+        if (type !== 'thuong') amount = -amount;
+        
+        addRecord(desc, amount, type);
+        document.getElementById('customDesc').value = '';
+        document.getElementById('customAmount').value = '';
+    }
+
+    function addRecord(desc, amount, type) {
+        const date = document.getElementById('recordDate').value;
+        if (!date) return alert("Vui lòng chọn ngày!");
+        
+        // Cần bảo mật thêm logic nếu user cố tình bypass UI disabled
+        if (lockedDates[currentChild].includes(date)) return alert("Ngày này đã chốt, không thể thêm mới!");
+
+        records.push({
+            id: Date.now(),
+            child: currentChild,
+            date: date,
+            desc: desc,
+            amount: amount,
+            type: type
+        });
+        localStorage.setItem('thuongPhatData', JSON.stringify(records));
+        currentPage = 1; 
+        renderHome();
+    }
+
+    function deleteRecord(id) {
+        if(confirm("Bạn có chắc muốn xóa bản ghi này?")) {
+            records = records.filter(r => r.id !== id);
+            localStorage.setItem('thuongPhatData', JSON.stringify(records));
+            renderHome();
+        }
+    }
+
+    function changePage(step) {
+        currentPage += step;
+        renderHome();
+    }
+
+    function renderHome() {
+        const historyList = document.getElementById('historyList');
+        historyList.innerHTML = '';
+
+        let totalBalance = 0;
+        let todayTotal = 0;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        const childRecords = records.filter(r => r.child === currentChild)
+                                    .sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+
+        childRecords.forEach(record => {
+            totalBalance += record.amount;
+            if (record.date === todayStr) todayTotal += record.amount;
+        });
+
+        const totalPages = Math.ceil(childRecords.length / ITEMS_PER_PAGE) || 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+        const endIdx = startIdx + ITEMS_PER_PAGE;
+        const paginatedRecords = childRecords.slice(startIdx, endIdx);
+
+        paginatedRecords.forEach(record => {
+            const li = document.createElement('li');
+            li.className = 'history-item';
+            const amountClass = record.amount > 0 ? 'text-success' : 'text-danger';
+            const amountSign = record.amount > 0 ? '+' : '';
+            const displayDate = record.date.split('-').reverse().join('/');
+            
+            // Xử lý ẩn Nút Xóa nếu ngày đó đã chốt
+            const isRecordLocked = lockedDates[currentChild].includes(record.date);
+            const actionHtml = isRecordLocked 
+                ? `<span style="font-size: 11px; color: #7f8c8d; margin-left:10px;">🔒 Đã chốt</span>`
+                : `<button class="delete-btn" onclick="deleteRecord(${record.id})">Xóa</button>`;
+
+            li.innerHTML = `
+                <div class="item-info">
+                    <span class="item-desc">${record.desc}</span>
+                    <span class="item-date">${displayDate}</span>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <span class="${amountClass}">${amountSign}${formatMoney(record.amount)}</span>
+                    ${actionHtml}
+                </div>
+            `;
+            historyList.appendChild(li);
+        });
+
+        document.getElementById('pageInfo').innerText = `Trang ${currentPage}/${totalPages}`;
+        document.getElementById('btnPrev').disabled = currentPage === 1;
+        document.getElementById('btnNext').disabled = currentPage === totalPages;
+
+        document.getElementById('totalBalance').innerText = formatMoney(totalBalance);
+        const todayElement = document.getElementById('todaySummary');
+        todayElement.innerText = (todayTotal > 0 ? '+' : '') + formatMoney(todayTotal);
+        todayElement.className = todayTotal >= 0 ? 'text-success' : 'text-danger';
+        
+        updateLockStatusUI();
+    }
+
+    function renderReport() {
+        const childRecords = records.filter(r => r.child === currentChild);
+        
+        const groupedData = {};
+        childRecords.forEach(record => {
+            if (!groupedData[record.date]) {
+                groupedData[record.date] = { thuong: 0, phat: 0, net: 0 };
+            }
+            if (record.amount > 0) {
+                groupedData[record.date].thuong += record.amount;
+            } else {
+                groupedData[record.date].phat += record.amount;
+            }
+            groupedData[record.date].net += record.amount;
+        });
+
+        const sortedDates = Object.keys(groupedData).sort((a, b) => new Date(b) - new Date(a));
+        const reportBody = document.getElementById('reportBody');
+        reportBody.innerHTML = '';
+
+        if(sortedDates.length === 0) {
+            reportBody.innerHTML = '<tr><td colspan="4">Chưa có dữ liệu</td></tr>';
+            return;
+        }
+
+        sortedDates.forEach(date => {
+            const data = groupedData[date];
+            const displayDate = date.split('-').reverse().join('/').substring(0,5); 
+            
+            // Hiển thị biểu tượng 🔒 ở tab Báo cáo nếu ngày đó đã chốt
+            const isDateLocked = lockedDates[currentChild].includes(date);
+            const lockIconHtml = isDateLocked ? ' <span style="font-size:10px;">🔒</span>' : '';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight: bold;">${displayDate}${lockIconHtml}</td>
+                <td class="text-success">+${formatMoneyShort(data.thuong)}</td>
+                <td class="text-danger">${formatMoneyShort(data.phat)}</td>
+                <td class="${data.net >= 0 ? 'text-success' : 'text-danger'} font-weight-bold">
+                    ${data.net > 0 ? '+' : ''}${formatMoneyShort(data.net)}
+                </td>
+            `;
+            reportBody.appendChild(tr);
+        });
+    }
+
+    // Khởi chạy khi load
+    updateLockStatusUI();
+    renderHome();
+</script>
+
+</body>
+</html>
