@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản Lý Thưởng Phạt Các Con V2</title>
+    <title>Quản Lý Thưởng Phạt Các Con V3</title>
     <style>
         :root { --primary: #4a90e2; --success: #2ecc71; --danger: #e74c3c; --warning: #f39c12; --bg: #f4f7f6; --card: #ffffff; --text: #333333; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
@@ -60,10 +60,9 @@
 </head>
 <body>
 
-<!-- Loader chỉ hiện khi mới tải trang lần đầu -->
 <div id="loader">
     <div class="spinner"></div>
-    <p style="font-weight: bold; margin-top: 10px; color: var(--primary);">Đang đồng bộ dữ liệu...</p>
+    <p style="font-weight: bold; margin-top: 10px; color: var(--primary);">Đang tải dữ liệu...</p>
 </div>
 
 <div class="container">
@@ -176,7 +175,15 @@
         </div>
     </div>
 
+    <!-- KHU VỰC BÁO CÁO THỐNG KÊ -->
     <div id="reportView" style="display: none;">
+        
+        <!-- Bảng tổng quỹ riêng cho tab Báo cáo (Màu xanh lá để dễ phân biệt) -->
+        <div class="balance-box" style="background: linear-gradient(135deg, #16a085, #2ecc71);">
+            <div>Tổng quỹ đến hiện tại của <span class="currentChildNameDisplay">Vũ Quốc Thiện</span></div>
+            <div class="balance-amount" id="reportTotalBalance">0 đ</div>
+        </div>
+
         <div class="card">
             <h3>Thống kê theo ngày của <br><span class="currentChildNameDisplay" style="color: var(--primary);">Vũ Quốc Thiện</span></h3>
             <table id="reportTable">
@@ -194,14 +201,22 @@
             </table>
         </div>
     </div>
-
 </div>
 
 <script>
-    // -------------------------------------------------------------
-    // DÁN URL CỦA BẠN VÀO ĐÂY:
+    window.onerror = function(msg, url, line) {
+        document.getElementById('loader').style.display = 'none';
+        if(msg.toLowerCase().includes('syntax') || msg.toLowerCase().includes('unexpected')) {
+            alert("⚠️ CẢNH BÁO: BẠN ĐÃ DÁN LINK BỊ LỖI CÚ PHÁP!\n\nHãy kiểm tra lại dòng có chữ SCRIPT_URL. Có thể bạn đã lỡ xóa mất dấu ngoặc kép ( \" ) bao quanh link. Hãy sửa lại ngay nhé!");
+        }
+    };
+</script>
+
+<script>
+    // =============================================================
+    // DÁN URL CỦA BẠN VÀO ĐÂY (GIỮ NGUYÊN 2 DẤU NGOẶC KÉP)
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxs2nuRNIBnJGEYs8mtB4ti7KNyDJMXh4P2kNr0Ndyr_pr3QHDgZOAj4uRzrABlelkRMw/exec"; 
-    // -------------------------------------------------------------
+    // =============================================================
 
     let currentChild = 'Vũ Quốc Thiện';
     let currentView = 'home';
@@ -216,27 +231,31 @@
     function formatMoney(amount) { return amount.toLocaleString('vi-VN') + ' đ'; }
     function formatMoneyShort(amount) { return (amount/1000) + 'k'; }
     
-    // HÀM SỬA LỖI LỆCH MÚI GIỜ KHI TẢI TỪ GOOGLE SHEETS
     function parseSheetDate(dStr) {
         if (!dStr) return "";
-        if (!dStr.includes('T')) return dStr.substring(0, 10);
-        // Tự động điều chỉnh UTC về giờ Việt Nam (Local Time)
-        const d = new Date(dStr);
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
+        let str = String(dStr);
+        if (str.indexOf('T') === -1) return str.substring(0, 10);
+        
+        let d = new Date(str);
+        let yyyy = d.getFullYear();
+        let mm = String(d.getMonth() + 1).padStart(2, '0');
+        let dd = String(d.getDate()).padStart(2, '0');
         return `${yyyy}-${mm}-${dd}`;
     }
 
-    // HÀM TẢI DỮ LIỆU LẦN ĐẦU (Có Loader)
     async function loadData() {
         document.getElementById('loader').style.display = 'flex';
         try {
+            if(SCRIPT_URL.includes("DÁN_URL_APPS_SCRIPT") || SCRIPT_URL.trim() === "") {
+                throw new Error("BẠN CHƯA DÁN LINK GOOGLE APPS SCRIPT!\nHãy dán link vào biến SCRIPT_URL trong mã code để sử dụng.");
+            }
+
             const response = await fetch(SCRIPT_URL);
             const data = await response.json();
             
-            // Xử lý lại định dạng ngày chuẩn
-            records = (data.records || []).map(r => ({ ...r, date: parseSheetDate(r.date) }));
+            records = (data.records || []).map(r => {
+                return { id: r.id, child: r.child, date: parseSheetDate(r.date), desc: r.desc, amount: r.amount, type: r.type };
+            });
             
             const rawLocks = data.lockedDates || { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
             lockedDates = { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
@@ -248,19 +267,25 @@
             updateLockStatusUI();
             if(currentView === 'home') renderHome();
             else renderReport();
+
         } catch (error) {
             console.error(error);
+            let msg = error.message;
+            if (msg.includes('Unexpected token') || msg.includes('is not valid JSON') || msg.includes('Failed to fetch')) {
+                alert("⚠️ LỖI QUYỀN TRUY CẬP TRÊN GOOGLE SHEETS!\n\nLink bạn dán đã đúng, nhưng ở bước Deploy Google Apps Script, phần 'Who has access', bạn CHƯA chọn 'Bất kỳ ai' (Anyone). Google đang bắt phải đăng nhập mới cho tải dữ liệu.\n\nHãy vào Google Apps Script -> Deploy -> Manage deployments -> Bấm cái bút chì (Edit) -> Ở mục 'Who has access' chọn 'Anyone' -> Deploy lại nhé.");
+            } else {
+                alert("⚠️ " + msg);
+            }
+        } finally {
+            document.getElementById('loader').style.display = 'none';
         }
-        document.getElementById('loader').style.display = 'none';
     }
 
-    // HÀM ĐỒNG BỘ CHẠY NGẦM (Không hiện Loader, không chờ đợi - CỰC NHANH)
     function sendDataBackground(action, formDataObj) {
         const formData = new FormData();
         formData.append('action', action);
         for (let key in formDataObj) { formData.append(key, formDataObj[key]); }
 
-        // Bắn API đi và không quan tâm đến response để ứng dụng không bị khựng
         fetch(SCRIPT_URL, { method: 'POST', body: formData })
             .catch(error => console.error("Lỗi đồng bộ ngầm: ", error));
     }
@@ -269,7 +294,7 @@
 
     function updateLockStatusUI() {
         const selectedDate = document.getElementById('recordDate').value;
-        const isLocked = lockedDates[currentChild].includes(selectedDate);
+        const isLocked = lockedDates[currentChild] && lockedDates[currentChild].includes(selectedDate);
         const btnLockDate = document.getElementById('btnLockDate');
         const lockMessage = document.getElementById('lockMessage');
         const actionButtons = document.getElementById('inputSection').querySelectorAll('button');
@@ -296,12 +321,9 @@
         
         if (confirm(`Bạn chắc chắn muốn CHỐT SỔ ngày ${displayDate} cho ${currentChild}?`)) {
             if (!lockedDates[currentChild].includes(selectedDate)) {
-                // 1. CẬP NHẬT GIAO DIỆN TỨC THÌ
                 lockedDates[currentChild].push(selectedDate);
                 updateLockStatusUI();
                 renderHome();
-                
-                // 2. GỬI DỮ LIỆU NGẦM
                 sendDataBackground('lockDate', { child: currentChild, date: selectedDate });
             }
         }
@@ -360,7 +382,7 @@
     function addRecord(desc, amount, type) {
         const date = document.getElementById('recordDate').value;
         if (!date) return alert("Vui lòng chọn ngày!");
-        if (lockedDates[currentChild].includes(date)) return alert("Ngày này đã chốt!");
+        if (lockedDates[currentChild] && lockedDates[currentChild].includes(date)) return alert("Ngày này đã chốt!");
 
         const newRecord = {
             id: Date.now().toString(),
@@ -371,22 +393,16 @@
             type: type
         };
 
-        // 1. CẬP NHẬT GIAO DIỆN TỨC THÌ ĐỂ KHÔNG BỊ TRỄ
         records.push(newRecord);
         currentPage = 1; 
         renderHome();
-
-        // 2. GỬI DỮ LIỆU NGẦM LÊN GOOGLE SHEETS
         sendDataBackground('addRecord', newRecord);
     }
 
     function deleteRecord(id) {
         if(confirm("Bạn có chắc muốn xóa bản ghi này?")) {
-            // 1. XOÁ TRÊN GIAO DIỆN TỨC THÌ
             records = records.filter(r => r.id != id);
             renderHome();
-            
-            // 2. XOÁ CHẠY NGẦM LÊN GOOGLE SHEETS
             sendDataBackground('deleteRecord', { id: id });
         }
     }
@@ -421,10 +437,8 @@
             const amountClass = record.amount > 0 ? 'text-success' : 'text-danger';
             const amountSign = record.amount > 0 ? '+' : '';
             
-            // Ngày được xử lý chắc chắn đã chuẩn hoá
             const displayDate = record.date.split('-').reverse().join('/');
-            
-            const isRecordLocked = lockedDates[currentChild].includes(record.date);
+            const isRecordLocked = lockedDates[currentChild] && lockedDates[currentChild].includes(record.date);
             const actionHtml = isRecordLocked ? `<span style="font-size: 11px; color: #7f8c8d; margin-left:10px;">🔒 Đã chốt</span>` : `<button class="delete-btn" onclick="deleteRecord('${record.id}')">Xóa</button>`;
 
             li.innerHTML = `
@@ -456,7 +470,12 @@
         const childRecords = records.filter(r => r.child === currentChild);
         const groupedData = {};
         
+        // Biến tính tổng quỹ hiện tại cho báo cáo
+        let totalBalance = 0; 
+        
         childRecords.forEach(record => {
+            totalBalance += record.amount; // Cộng dồn tiền
+            
             const dateStr = record.date;
             if (!groupedData[dateStr]) groupedData[dateStr] = { thuong: 0, phat: 0, net: 0 };
             
@@ -465,6 +484,12 @@
             
             groupedData[dateStr].net += record.amount;
         });
+
+        // Hiển thị tổng quỹ lên giao diện Báo cáo
+        const reportTotalEl = document.getElementById('reportTotalBalance');
+        if (reportTotalEl) {
+            reportTotalEl.innerText = formatMoney(totalBalance);
+        }
 
         const sortedDates = Object.keys(groupedData).sort((a, b) => new Date(b) - new Date(a));
         const reportBody = document.getElementById('reportBody');
@@ -478,7 +503,7 @@
         sortedDates.forEach(date => {
             const data = groupedData[date];
             const displayDate = date.split('-').reverse().join('/').substring(0,5); 
-            const isDateLocked = lockedDates[currentChild].includes(date);
+            const isDateLocked = lockedDates[currentChild] && lockedDates[currentChild].includes(date);
             const lockIconHtml = isDateLocked ? ' <span style="font-size:10px;">🔒</span>' : '';
 
             const tr = document.createElement('tr');
