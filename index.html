@@ -5,17 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản Lý Thưởng Phạt Các Con</title>
     <style>
-        :root {
-            --primary: #4a90e2;
-            --success: #2ecc71;
-            --danger: #e74c3c;
-            --warning: #f39c12;
-            --bg: #f4f7f6;
-            --card: #ffffff;
-            --text: #333333;
-        }
+        :root { --primary: #4a90e2; --success: #2ecc71; --danger: #e74c3c; --warning: #f39c12; --bg: #f4f7f6; --card: #ffffff; --text: #333333; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
+        .container { max-width: 600px; margin: 0 auto; position: relative; }
         .card { background: var(--card); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         h1, h2, h3 { margin-top: 0; text-align: center; }
         
@@ -23,12 +15,11 @@
         .balance-amount { font-size: 2.5em; font-weight: bold; margin: 10px 0; }
 
         select, input[type="date"], input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 10px;}
-        
         .action-group { display: flex; gap: 10px; margin-bottom: 15px; }
         .action-group select { flex: 2; margin-bottom: 0; }
         .action-group button { flex: 1; }
 
-        button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; transition: opacity 0.2s; color: white; }
+        button { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; color: white; }
         button:active { opacity: 0.8; }
         button:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.7; }
         
@@ -36,17 +27,15 @@
         .btn-phat { background-color: var(--danger); }
         .btn-tieudung { background-color: var(--warning); }
         .btn-lock { background-color: #34495e; padding: 10px 15px; }
+        .delete-btn { background: #ff7675; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; }
 
         .history-list { list-style: none; padding: 0; margin: 0; }
         .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
         .item-info { display: flex; flex-direction: column; }
         .item-date { font-size: 0.8em; color: #777; }
         .item-desc { font-weight: bold; }
-        
         .text-success { color: var(--success); font-weight: bold; }
         .text-danger { color: var(--danger); font-weight: bold; }
-        
-        .delete-btn { background: #ff7675; padding: 5px 10px; border-radius: 5px; font-size: 12px; margin-left: 10px; }
 
         .main-tabs, .child-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
         .tab { flex: 1; padding: 10px; text-align: center; background: #ddd; border-radius: 8px; cursor: pointer; font-weight: bold; }
@@ -63,20 +52,29 @@
         th:first-child { border-top-left-radius: 8px; }
         th:last-child { border-top-right-radius: 8px; }
         tr:nth-child(even) { background-color: #f9f9f9; }
+
+        /* Spinner Loading */
+        #loader { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+        .spinner { border: 5px solid #f3f3f3; border-top: 5px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
+<!-- Màn hình Loading -->
+<div id="loader">
+    <div class="spinner"></div>
+    <p style="font-weight: bold; margin-top: 10px; color: var(--primary);">Đang đồng bộ dữ liệu...</p>
+</div>
+
 <div class="container">
     <h2 style="color: var(--primary);">Quản Lý Thưởng Phạt</h2>
 
-    <!-- Tab Chức Năng Chính -->
     <div class="main-tabs">
         <div class="tab main-tab active" onclick="switchMainTab('home')">📋 Nhập liệu</div>
         <div class="tab main-tab" onclick="switchMainTab('report')">📊 Báo cáo</div>
     </div>
 
-    <!-- Tab Chọn Con -->
     <div class="child-tabs">
         <div class="tab child-tab active" onclick="switchChild('Vũ Quốc Thiện')">Vũ Quốc Thiện</div>
         <div class="tab child-tab" onclick="switchChild('Vũ Công Thành')">Vũ Công Thành</div>
@@ -93,7 +91,6 @@
         <div class="card">
             <h3>Ghi nhận theo quy định</h3>
             
-            <!-- Chốt ngày -->
             <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
                 <input type="date" id="recordDate" style="margin-bottom: 0; flex: 1;" onchange="updateLockStatusUI()">
                 <button id="btnLockDate" class="btn-lock" onclick="lockCurrentDate()">🔒 Chốt ngày</button>
@@ -102,7 +99,6 @@
                 ⚠️ Ngày này đã chốt, không thể thêm/xóa giao dịch.
             </p>
             
-            <!-- Vùng Nhập Liệu (Sẽ bị khóa nếu đã chốt ngày) -->
             <div id="inputSection">
                 <div class="action-group">
                     <select id="thuongSelect">
@@ -204,44 +200,80 @@
 </div>
 
 <script>
+    // -------------------------------------------------------------
+    // THAY URL CỦA BẠN VÀO DÒNG BÊN DƯỚI
+    const SCRIPT_URL = "DÁN_URL_APPS_SCRIPT_CỦA_BẠN_VÀO_ĐÂY"; 
+    // -------------------------------------------------------------
+
     let currentChild = 'Vũ Quốc Thiện';
     let currentView = 'home';
     let currentPage = 1;
     const ITEMS_PER_PAGE = 20;
 
-    // Load Data từ Local Storage
-    let records = JSON.parse(localStorage.getItem('thuongPhatData')) || [];
-    
-    // Cấu trúc LockedDates: { "Vũ Quốc Thiện": ["2026-11-05"], "Vũ Công Thành": [] }
-    let lockedDates = JSON.parse(localStorage.getItem('thuongPhatLockedDates')) || {};
-    if(!lockedDates['Vũ Quốc Thiện']) lockedDates['Vũ Quốc Thiện'] = [];
-    if(!lockedDates['Vũ Công Thành']) lockedDates['Vũ Công Thành'] = [];
+    let records = [];
+    let lockedDates = { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
 
-    // Khởi tạo ngày hiện tại
     document.getElementById('recordDate').valueAsDate = new Date();
 
-    function formatMoney(amount) {
-        return amount.toLocaleString('vi-VN') + ' đ';
-    }
-    
-    function formatMoneyShort(amount) {
-        return (amount/1000) + 'k'; 
+    function formatMoney(amount) { return amount.toLocaleString('vi-VN') + ' đ'; }
+    function formatMoneyShort(amount) { return (amount/1000) + 'k'; }
+
+    // HÀM GIAO TIẾP VỚI GOOGLE SHEETS
+    async function loadData() {
+        showLoader();
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const data = await response.json();
+            records = data.records || [];
+            lockedDates = data.lockedDates || { "Vũ Quốc Thiện": [], "Vũ Công Thành": [] };
+            
+            // Xử lý trường hợp sheet trống chưa có mảng con
+            if(!lockedDates['Vũ Quốc Thiện']) lockedDates['Vũ Quốc Thiện'] = [];
+            if(!lockedDates['Vũ Công Thành']) lockedDates['Vũ Công Thành'] = [];
+            
+            updateLockStatusUI();
+            if(currentView === 'home') renderHome();
+            else renderReport();
+        } catch (error) {
+            console.error(error);
+            alert("Lỗi tải dữ liệu. Vui lòng thử lại!");
+        }
+        hideLoader();
     }
 
-    // Kiểm tra và Cập nhật giao diện Khóa (Chốt ngày)
+    async function sendData(action, formDataObj) {
+        showLoader();
+        const formData = new FormData();
+        formData.append('action', action);
+        for (let key in formDataObj) { formData.append(key, formDataObj[key]); }
+
+        try {
+            await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+            await loadData(); // Tải lại toàn bộ dữ liệu mới nhất
+        } catch (error) {
+            console.error(error);
+            alert("Lỗi kết nối. Vui lòng kiểm tra mạng!");
+            hideLoader();
+        }
+    }
+
+    // TẢI DỮ LIỆU LẦN ĐẦU
+    loadData();
+
+    function showLoader() { document.getElementById('loader').style.display = 'flex'; }
+    function hideLoader() { document.getElementById('loader').style.display = 'none'; }
+
     function updateLockStatusUI() {
         const selectedDate = document.getElementById('recordDate').value;
         const isLocked = lockedDates[currentChild].includes(selectedDate);
-        
         const btnLockDate = document.getElementById('btnLockDate');
         const lockMessage = document.getElementById('lockMessage');
-        const inputSection = document.getElementById('inputSection');
-        const actionButtons = inputSection.querySelectorAll('button');
+        const actionButtons = document.getElementById('inputSection').querySelectorAll('button');
 
         if (isLocked) {
             btnLockDate.innerText = '🔒 Đã chốt';
             btnLockDate.disabled = true;
-            btnLockDate.style.background = '#95a5a6'; // Đổi màu xám
+            btnLockDate.style.background = '#95a5a6'; 
             lockMessage.style.display = 'block';
             actionButtons.forEach(btn => btn.disabled = true);
         } else {
@@ -258,12 +290,9 @@
         if (!selectedDate) return;
         const displayDate = selectedDate.split('-').reverse().join('/');
         
-        if (confirm(`Bạn chắc chắn muốn CHỐT SỔ ngày ${displayDate} cho ${currentChild}?\nSau khi chốt sẽ KHÔNG THỂ thêm mới hay xóa dữ liệu của ngày này.`)) {
+        if (confirm(`Bạn chắc chắn muốn CHỐT SỔ ngày ${displayDate} cho ${currentChild}?\nSau khi chốt sẽ KHÔNG THỂ sửa đổi.`)) {
             if (!lockedDates[currentChild].includes(selectedDate)) {
-                lockedDates[currentChild].push(selectedDate);
-                localStorage.setItem('thuongPhatLockedDates', JSON.stringify(lockedDates));
-                updateLockStatusUI();
-                renderHome(); // Render lại để ẩn các nút Xóa
+                sendData('lockDate', { child: currentChild, date: selectedDate });
             }
         }
     }
@@ -271,11 +300,8 @@
     function switchMainTab(view) {
         currentView = view;
         document.querySelectorAll('.main-tab').forEach(tab => {
-            if(tab.innerText.toLowerCase().includes(view === 'home' ? 'nhập' : 'báo cáo')) {
-                tab.classList.add('active');
-            } else {
-                tab.classList.remove('active');
-            }
+            if(tab.innerText.toLowerCase().includes(view === 'home' ? 'nhập' : 'báo cáo')) tab.classList.add('active');
+            else tab.classList.remove('active');
         });
 
         if(view === 'home') {
@@ -292,15 +318,12 @@
     function switchChild(childName) {
         currentChild = childName;
         currentPage = 1; 
-        
         document.querySelectorAll('.currentChildNameDisplay').forEach(el => el.innerText = childName);
         document.querySelectorAll('.child-tab').forEach(tab => {
             if(tab.innerText === childName) tab.classList.add('active');
             else tab.classList.remove('active');
         });
-        
         updateLockStatusUI();
-
         if(currentView === 'home') renderHome();
         else renderReport();
     }
@@ -310,7 +333,6 @@
         const option = select.options[select.selectedIndex];
         const desc = option.getAttribute('data-desc');
         let amount = parseInt(select.value);
-        
         if (type !== 'thuong') amount = -amount;
         addRecord(desc, amount, type);
     }
@@ -318,10 +340,8 @@
     function addCustom(type) {
         const desc = document.getElementById('customDesc').value;
         let amount = parseInt(document.getElementById('customAmount').value);
-        
         if (!desc || isNaN(amount) || amount <= 0) return alert("Vui lòng nhập lý do và số tiền hợp lệ!");
         if (type !== 'thuong') amount = -amount;
-        
         addRecord(desc, amount, type);
         document.getElementById('customDesc').value = '';
         document.getElementById('customAmount').value = '';
@@ -330,11 +350,9 @@
     function addRecord(desc, amount, type) {
         const date = document.getElementById('recordDate').value;
         if (!date) return alert("Vui lòng chọn ngày!");
-        
-        // Cần bảo mật thêm logic nếu user cố tình bypass UI disabled
-        if (lockedDates[currentChild].includes(date)) return alert("Ngày này đã chốt, không thể thêm mới!");
+        if (lockedDates[currentChild].includes(date)) return alert("Ngày này đã chốt!");
 
-        records.push({
+        sendData('addRecord', {
             id: Date.now(),
             child: currentChild,
             date: date,
@@ -342,16 +360,11 @@
             amount: amount,
             type: type
         });
-        localStorage.setItem('thuongPhatData', JSON.stringify(records));
-        currentPage = 1; 
-        renderHome();
     }
 
     function deleteRecord(id) {
         if(confirm("Bạn có chắc muốn xóa bản ghi này?")) {
-            records = records.filter(r => r.id !== id);
-            localStorage.setItem('thuongPhatData', JSON.stringify(records));
-            renderHome();
+            sendData('deleteRecord', { id: id });
         }
     }
 
@@ -363,13 +376,10 @@
     function renderHome() {
         const historyList = document.getElementById('historyList');
         historyList.innerHTML = '';
-
-        let totalBalance = 0;
-        let todayTotal = 0;
+        let totalBalance = 0; let todayTotal = 0;
         const todayStr = new Date().toISOString().split('T')[0];
 
-        const childRecords = records.filter(r => r.child === currentChild)
-                                    .sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+        const childRecords = records.filter(r => r.child === currentChild).sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
 
         childRecords.forEach(record => {
             totalBalance += record.amount;
@@ -380,22 +390,24 @@
         if (currentPage > totalPages) currentPage = totalPages;
         if (currentPage < 1) currentPage = 1;
 
-        const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIdx = startIdx + ITEMS_PER_PAGE;
-        const paginatedRecords = childRecords.slice(startIdx, endIdx);
+        const paginatedRecords = childRecords.slice((currentPage - 1) * ITEMS_PER_PAGE, ((currentPage - 1) * ITEMS_PER_PAGE) + ITEMS_PER_PAGE);
 
         paginatedRecords.forEach(record => {
             const li = document.createElement('li');
             li.className = 'history-item';
             const amountClass = record.amount > 0 ? 'text-success' : 'text-danger';
             const amountSign = record.amount > 0 ? '+' : '';
-            const displayDate = record.date.split('-').reverse().join('/');
             
-            // Xử lý ẩn Nút Xóa nếu ngày đó đã chốt
-            const isRecordLocked = lockedDates[currentChild].includes(record.date);
-            const actionHtml = isRecordLocked 
-                ? `<span style="font-size: 11px; color: #7f8c8d; margin-left:10px;">🔒 Đã chốt</span>`
-                : `<button class="delete-btn" onclick="deleteRecord(${record.id})">Xóa</button>`;
+            // Format ngày để tránh lỗi timezone hiển thị
+            let displayDate = record.date;
+            if(record.date.includes('T')) {
+                displayDate = record.date.split('T')[0].split('-').reverse().join('/');
+            } else {
+                displayDate = record.date.split('-').reverse().join('/');
+            }
+
+            const isRecordLocked = lockedDates[currentChild].includes(record.date.split('T')[0]);
+            const actionHtml = isRecordLocked ? `<span style="font-size: 11px; color: #7f8c8d; margin-left:10px;">🔒 Đã chốt</span>` : `<button class="delete-btn" onclick="deleteRecord(${record.id})">Xóa</button>`;
 
             li.innerHTML = `
                 <div class="item-info">
@@ -413,8 +425,8 @@
         document.getElementById('pageInfo').innerText = `Trang ${currentPage}/${totalPages}`;
         document.getElementById('btnPrev').disabled = currentPage === 1;
         document.getElementById('btnNext').disabled = currentPage === totalPages;
-
         document.getElementById('totalBalance').innerText = formatMoney(totalBalance);
+        
         const todayElement = document.getElementById('todaySummary');
         todayElement.innerText = (todayTotal > 0 ? '+' : '') + formatMoney(todayTotal);
         todayElement.className = todayTotal >= 0 ? 'text-success' : 'text-danger';
@@ -424,18 +436,16 @@
 
     function renderReport() {
         const childRecords = records.filter(r => r.child === currentChild);
-        
         const groupedData = {};
+        
         childRecords.forEach(record => {
-            if (!groupedData[record.date]) {
-                groupedData[record.date] = { thuong: 0, phat: 0, net: 0 };
-            }
-            if (record.amount > 0) {
-                groupedData[record.date].thuong += record.amount;
-            } else {
-                groupedData[record.date].phat += record.amount;
-            }
-            groupedData[record.date].net += record.amount;
+            const dateStr = record.date.includes('T') ? record.date.split('T')[0] : record.date;
+            if (!groupedData[dateStr]) groupedData[dateStr] = { thuong: 0, phat: 0, net: 0 };
+            
+            if (record.amount > 0) groupedData[dateStr].thuong += record.amount;
+            else groupedData[dateStr].phat += record.amount;
+            
+            groupedData[dateStr].net += record.amount;
         });
 
         const sortedDates = Object.keys(groupedData).sort((a, b) => new Date(b) - new Date(a));
@@ -450,8 +460,6 @@
         sortedDates.forEach(date => {
             const data = groupedData[date];
             const displayDate = date.split('-').reverse().join('/').substring(0,5); 
-            
-            // Hiển thị biểu tượng 🔒 ở tab Báo cáo nếu ngày đó đã chốt
             const isDateLocked = lockedDates[currentChild].includes(date);
             const lockIconHtml = isDateLocked ? ' <span style="font-size:10px;">🔒</span>' : '';
 
@@ -467,10 +475,6 @@
             reportBody.appendChild(tr);
         });
     }
-
-    // Khởi chạy khi load
-    updateLockStatusUI();
-    renderHome();
 </script>
 
 </body>
